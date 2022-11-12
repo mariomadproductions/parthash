@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import hashlib
+from zlib import crc32
+import sys
+from pathlib import Path
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -12,25 +14,25 @@ def get_args():
 def get_file_part_hashes(filename,partsize):
     with open(filename, mode='rb') as file:
         while True:
-            sha256_hash_object = hashlib.sha256()
-            start_offset = file.tell()
+            crc32_result = 0
             data = file.read(partsize)
-            end_offset = file.tell()
-            amount_read = end_offset - start_offset
             if not data:
                 break
             else:
-                sha256_hash_object.update(data)
-                sha256_hash_object_str = sha256_hash_object.hexdigest()
-                yield start_offset, amount_read, sha256_hash_object_str
+                crc32_result = crc32(data, crc32_result)
+                yield crc32_result
 
 def main():
     args = get_args()
-    input_file = args.input_file
+    input_file_path = Path(args.input_file)
+    input_file_size = input_file_path.stat().st_size
     part_size = args.part_size
-    for start_offset, amount_read, hash_str in get_file_part_hashes(input_file,
-                                                              part_size):
-        print(f'{start_offset:x} {amount_read:x} {hash_str}')
+    
+    sys.stdout.buffer.write(input_file_size.to_bytes(8, byteorder='big'))
+    sys.stdout.buffer.write(part_size.to_bytes(8, byteorder='big'))
+    
+    for crc32_result in get_file_part_hashes(input_file_path, part_size):
+        sys.stdout.buffer.write(crc32_result.to_bytes(4, byteorder='big'))
 
 if __name__ == '__main__':
     main()
